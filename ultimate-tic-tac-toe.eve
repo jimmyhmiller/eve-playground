@@ -1,0 +1,160 @@
+#Testing
+
+Create a mega-board
+
+```
+ match
+    [#session-connect]
+
+    // board constants
+    size = 3
+    starting-player = "X"
+
+    // generate the cells
+    i = range[from: 0, to: size]
+    j = range[from: 0, to: size]
+    k = range[from: 0, to: size]
+    l = range[from: 0, to: size]
+
+ commit
+    mega-board = [@mega-board size player: starting-player]
+    board = [#board size mega-board row: i column: j #active]
+    [#cell board row: k column: l]
+```
+
+
+Drawing the mega-board
+```
+  match
+   mega-board = [@mega-board size]
+    board = [#board row: board-row column: board-column]
+    cell = [#cell board row column]
+    contents = if cell.player then cell.player
+              else ""
+    padding = if board-row != 2 then 20 else 0
+    color = if board = [#board #active] then "white"
+        else "gray"
+  bind
+  [#div class: "row" style: [padding-bottom: padding] sort: board-row children:
+    [#div board @container style: [font-family: "sans-serif", padding-right: 10], sort: board-column children:
+      [#div #status board class: "status", style: [text-align: "center", width: 150, padding-bottom: 10]]
+      [#div class: "board" style: [color: "black"] children:
+        [#div class: "row" sort: row children:
+          [#div #cell class: "cell" cell text: contents sort: column style:
+            [display: "inline-block" width: "50px" height: "50px" border: "1px solid black" background: color font-size: "2em" line-height: "50px" text-align: "center"]]]]]
+```
+
+
+handle all clicked and active
+
+```
+ match
+   board = [#board size: N]
+   cell = [#cell board player]
+   N * N = count[given: cell, per: board]
+  commit
+   board += #full
+```
+
+if full and active, make other non-full boards active
+
+```
+ match
+   board = [#board #full #active]
+   non-full-boards = [#board not(#full)]
+   counter = [@counter count]
+ commit
+   non-full-boards += #active
+   board -= #active
+
+```
+
+Clicking stuff first move
+
+```
+  match
+    [#click #direct-target element: [#div cell]]
+    not(cell.player)                                    // Ensures the cell hasn't been played
+    mega-board = [@mega-board player: current]  // Ensures the game has not been won
+    cell.board = [#board #active]
+    row = cell.row
+    column = cell.column
+    new-board = [#board row = row column = column]
+    active-boards = [#board #active]
+    next_player = if current = "X" then "O"        // Switches to the next player
+                  else "X"
+  commit
+    active-boards -= #active
+    new-board += #active
+    mega-board.player := next_player
+    cell.player := current
+    
+```
+
+
+
+Now we tag some special cell groupings: diagonal and anti-diagonal cells. The diagonal cells are (0, 0), (1, 1), and (2, 2). From this we can see that diagonal cells have a row index equal to its column index
+
+```
+  match
+    cells = [#cell row column]
+    row = column
+  bind
+    cells += #diagonal
+```
+
+Similarly, the anti-diagonal cells are (0, 2), (1, 1), and (2, 0).
+
+Anti-diagonal cells satisfy the equation `row + col = N - 1`,
+where N is the size of the board.
+
+```
+  match
+    cells = [#cell row column]
+    [#board size: N]
+    row + column = N - 1
+  bind
+    cells += #anti-diagonal
+```
+
+A game is won when a player marks N cells in a row, column, or diagonal.
+The game can end in a tie, where no player has N in a row.
+
+```
+  match
+    board = [#board size: N, not(winner)]
+                     // Check for a winning row
+    (winner, cell) = if cell = [#cell row player board]
+                       N = count[given: cell, per: (row, player, board)] then (player, cell)
+                     // Check for a winning column
+                     else if cell = [#cell column player board]
+                       N = count[given: cell, per: (column, player, board)] then (player, cell)
+                     // Check for a diagonal win
+                     else if cell = [#diagonal row column player board]
+                       N = count[given: cell, per: (player, board)] then (player, cell)
+                     // Check for an anti-diagonal win
+                     else if cell = [#anti-diagonal row column player board]
+                       N = count[given: cell, per: (player, board)] then (player, cell)
+                     // If all cells are filled but there are no winners
+                     else if cell = [#cell player board]
+                       N * N = count[given: cell] then ("nobody", cell)
+  commit
+    board.winner := winner
+    cell += #winner
+```
+
+We use the `count` aggregate in the above block. Count returns the number of discrete values (the cardinality) of the variables in `given`. The optional `per` attribute allows you to specify groupings, which yield one result for each set of values in the group.
+
+For example, in `count[given: cell, per: player]` we group by `player`, which returns two values: the count of cells marked by player `X` and those marked by `O`. This can be read "count the cells per player". In the scoring block, we group by `column` and `player`. This will return the count of cells marked by a player in a particular column. Like wise with the row case. By equating this with N, we ensure the winning player is only returned when she has marked N cells in the given direction.
+
+
+Show winning board
+```
+ match
+   board = [#board winner]
+  bind
+   [#div children: 
+     [#div text: winner]
+      [#span text: board.row]
+      [#span text: board.column]]
+
