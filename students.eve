@@ -1,0 +1,73 @@
+Start with our initial set of students.
+
+```
+ match
+  [#session-connect]
+  commit
+   [#student name: "jimmy"]
+   [#student name: "austin"]
+```
+
+
+Add each student to our list of students. Be sure to allow them to be deleted.
+```
+ match
+   student = [#student]
+   students-list = [@students-list]
+  bind
+   students-list.children += 
+    [#li student children:
+     [#span text: student.name student #student-item]
+     [#span text: " - delete" student #delete-button]]
+```
+
+Display our list of students and a new students button
+```
+ bind
+   [#div children:
+    [#ul @students-list]
+      [@new-student #input placeholder: "new student"]]
+
+```
+
+
+Add a new students on enter of @new-student
+```
+ match
+    element = [@new-student value]
+    kd = [#keydown element, key: "enter"]
+  commit
+   [#student name: value #active]
+    element.value := ""
+```
+
+Delete student when delete clicked
+```
+  match
+    element = [#delete-button student]
+    [#click element]
+  commit
+   student -= #student
+```
+
+Turn student item into input
+```
+ match
+   element = [#student-item student #span]
+    [#double-click element]
+  commit
+   element -= #span
+    element += #input
+    element.value := student.name
+```
+
+Edit student name
+```
+ match
+   element = [#student-item student value #input]
+    [#keydown element key: "enter"]
+  commit
+   student.name := value
+   element -= #input
+    element += #span
+```
